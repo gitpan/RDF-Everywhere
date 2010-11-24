@@ -1,0 +1,43 @@
+---
+abstract: 'makes everything in your Perl code an RDF resource.'
+author:
+  - 'Toby Inkster <tobyink@cpan.org>'
+build_requires:
+  ExtUtils::MakeMaker: 6.42
+  Module::Signature: 0.66
+  Test::More: 0.61
+configure_requires:
+  ExtUtils::MakeMaker: 6.42
+distribution_type: module
+generated_by: 'Module::Install version 1.00'
+keywords:
+  - Perl
+  - RDF
+  - SemWeb
+  - 'Semantic Web'
+  - hashref
+  - class
+  - arrayref
+  - scalar
+  - UNIVERSAL
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: RDF-Everywhere
+no_index:
+  directory:
+    - inc
+    - t
+requires:
+  Data::UUID: 0
+  RDF::Trine: 0.130
+  Scalar::Util: 1.00
+  URI: 1.30
+  perl: 5.8.0
+resources:
+  bugtracker: http://rt.cpan.org/Dist/Display.html?Queue=RDF-Everywhere
+  homepage: http://search.cpan.org/dist/RDF-Everywhere/
+  license: http://dev.perl.org/licenses/
+  repository: http://goddamn.co.uk/viewvc/perlmods/RDF-Everywhere/
+version: 0.001

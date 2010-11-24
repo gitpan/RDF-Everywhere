@@ -1,0 +1,169 @@
+NAME
+    RDF::Everywhere - makes everything in your Perl code an RDF resource.
+
+SYNOPSIS
+      use RDF::Everywhere;
+  
+      # Methods are installed in UNIVERSAL, so can be called on any
+      # blessed object.
+      $headers = LWP::UserAgent->new->get('http://example.com/')->headers;
+      printf("## %s\n", $headers->rdf_node->as_ntriples);
+      print $headers->to_rdf(as => 'Turtle');
+  
+      use RDF::Everywhere qw[rdf_node to_rdf];
+  
+      # They can also be used as functions, which is useful when calling
+      # on unblessed variables.
+      print to_rdf {
+        name      => 'Toby Inkster',
+        cpanid    => 'TOBYINK',
+        page      => URI->new('http://search.cpan.org/~tobyink/'),
+        dist      => [
+            { name => 'RDF-Everywhere',     version => '0.001' },
+            { name => 'RDF-TrineShortcuts', version => '0.102' },
+          ],
+        }, as => 'RDFXML';
+
+DESCRIPTION
+    I'd been thinking of doing something like this for a while, and then
+    Nathan Rixham went and wrote a Javascript version, which spurred me to
+    do it for Perl.
+
+    The idea is that RDF's graph data model is not dissimilar to Perl's data
+    model, so all Perl objects get a "to_rdf" method which returns an RDF
+    equivalent of the object's data.
+
+  Universal Methods
+    The following methods are defined in the UNIVERSAL namespace, which
+    means they can be called on all blessed objects (like "can" and "isa").
+
+    "rdf_node"
+        Returns an RDF::Trine::Node object identifying the object. This will
+        usually be an RDF::Trine::Node::Blank but occasionally a
+        RDF::Trine::Node::Resource or even a RDF::Trine::Node::Literal.
+
+    "rdf_type"
+        Returns an RDF::Trine::Node::Resource object identifying the type of
+        object.
+
+    "to_rdf(%options)"
+        Returns an RDF::Trine::Model object containing data about the
+        object. The three options worth bothering about are:
+
+        as: instead of returning a Model, return a string formatted using
+        this serialisation. e.g. "as=>'Turtle'". Accepts the same
+        serialisations as "RDF::Trine::Serializer->new" (e.g. 'Turtle',
+        'RDFXML', 'NTriples', 'RDFJSON').
+        recurse: also include data about "child" objects. This is smart
+        enough to avoid infinite loops (or should be). Defaults to true, but
+        "recurse=>0" can be passed to force the method to avoid recursion.
+        model: an existing model to add data to. This is expected to be a
+        blessed object which has an "add_statement" method accepting an
+        RDF::Trine::Statement. An RDF::Trine::Model would be what you'd
+        normally provide.
+
+  Functions
+    The methods are also available as functions. Just export them:
+
+      use RDF::Everywhere qw[to_rdf];
+
+    And use them by passing the thing you want to convert to RDF as the
+    first parameter. This is useful in that it allows you to use
+    RDF::Everywhere's functionality with non-blessed variables.
+
+HOW IT WORKS
+    *Advanced usage information.*
+
+  How are Perl variables converted to RDF::Trine::Nodes?
+    A module can of course override rdf_node via normal Perl inheritance,
+    but the UNIVERSAL version works like this:
+
+    Firstly, @RDF::Everywhere::typed_literal_converters is checked for a
+    converter function that can handle it. This list takes the following
+    format:
+
+      (
+        [ 'Foo::Bar' => sub { my $obj = shift; ... ; return $node; } ],
+        [ 'Foo::Baz' => sub { my $obj = shift; ... ; return $node; } ],
+      );
+
+    If an entry in the list applies to the variable being converted, it is
+    use to perform the conversion.
+
+    Typed literal converters are pre-defined for <DateTime>, <URI>,
+    <Set::Array> and <RDF::Trine::Node>.
+
+    Failing that, if the variable being converted is a hashref (including
+    blessed hashrefs) with a key called '@about' then that is used as a
+    CURIE or URI to generate a RDF::Trine::Node::Resource.
+
+    Otherwise, all references are taken to be anonymous blank nodes, and
+    scalars taken to be plain literals.
+
+  How the RDF type of a Perl variable is decided?
+    A module can of course override rdf_type via normal Perl inheritance,
+    but the UNIVERSAL version works like this:
+
+    If the variable being converted is a hashref (including blessed
+    hashrefs) with a key called '@type' then that is used as a CURIE or URI
+    to generate a RDF::Trine::Node::Resource.
+
+    Otherwise, if the variable is a blessed object, the type is the URI
+    formed by concatenating "http://purl.org/NET/cpan-uri/class/" with the
+    package name the variable is blessed into.
+
+    Otherwise, it has no type.
+
+  How is RDF data for a variable generated?
+    A module can of course override to_rdf via normal Perl inheritance, but
+    the UNIVERSAL version works like this:
+
+    Firstly, @RDF::Everywhere::object_converters is checked for a converter
+    function that can handle it. This list takes the following format:
+
+      (
+        [ 'Foo::Bar' => sub { my $obj = shift; ... ; return $model; } ],
+        [ 'Foo::Baz' => sub { my $obj = shift; ... ; return $model; } ],
+      );
+
+    If an entry in the list applies to the variable being converted, it is
+    use to perform the conversion, and the result is returned.
+
+    A converter is pre-defined for <Set::Array> (treating it as an
+    rdf:List).
+
+    If nothing has been returned so far, a new model is created. A triple is
+    added to it stating the rdf:type of the object (if any).
+
+    If the variable being converted is a hashref (including blessed
+    hashrefs) it is iterated through as a set of predicate (CURIE) => object
+    pairs. If the object is an arrayref this is treated as multiple triples,
+    and not as an rdf:List (use Set::Array for rdf:Lists).
+
+  How does CURIE mapping work?
+    Tokens without a colon are looked up in %RDF::Everywhere::terms. If not
+    found, for predicates a default prefix
+    'http://wiki.ontologi.es/perl-object#' is used; for non-predicates, a
+    relative URI.
+
+    Tokens with a colon are treated as a CURIE with mappings from
+    %RDF::Everywhere::mappings. If no mapping is found, it is assumed to be
+    a URI.
+
+SEE ALSO
+    RDF::Trine, UNIVERSAL.
+
+    <http://perlrdf.org/>.
+
+BUGS
+    Please report any bugs to <http://rt.cpan.org/>.
+
+AUTHOR
+    Toby Inkster <tobyink@cpan.org>.
+
+COPYRIGHT
+    Copyright 2010 Toby Inkster
+
+    This library is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself.
+
