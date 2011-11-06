@@ -1,0 +1,33 @@
+@prefix :        <http://usefulinc.com/ns/doap#> .
+@prefix dcs:     <http://ontologi.es/doap-changeset#> .
+@prefix dc:      <http://purl.org/dc/terms/> .
+@prefix foaf:    <http://xmlns.com/foaf/0.1/> .
+@prefix my:      <http://purl.org/NET/cpan-uri/dist/RDF-Everywhere/> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix toby:    <http://tobyinkster.co.uk/#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+
+my:project :release my:v_0-001 .
+my:v_0-001
+	a               :Version ;
+	dc:issued       "2010-11-24"^^xsd:date ;
+	:revision       "0.001"^^xsd:string ;
+	:file-release   <http://backpan.cpan.org/authors/id/T/TO/TOBYINK/RDF-Everywhere-0.001.tar.gz> ;
+	rdfs:label      "Initial release"@en .
+
+my:project :release my:v_0-002 .
+my:v_0-002
+	a               :Version ;
+	dc:issued       "2011-11-06"^^xsd:date ;
+	:revision       "0.002"^^xsd:string ;
+	:file-release   <http://backpan.cpan.org/authors/id/T/TO/TOBYINK/RDF-Everywhere-0.002.tar.gz> ;
+	dcs:changeset [
+		dcs:versus my:v_0-001 ;
+		dcs:item   [ rdfs:label "RDF::Everywhere::define_term"@en ; a dcs:Addition ] ;
+		dcs:item   [ rdfs:label "RDF::Everywhere::define_prefix"@en ; a dcs:Addition ] ;
+		dcs:item   [ rdfs:label "RDF::Everywhere::install_object_converter"@en ; a dcs:Addition ] ;
+		dcs:item   [ rdfs:label "RDF::Everywhere::install_node_converter"@en ; a dcs:Addition ] ;
+		dcs:item   [ rdfs:label "Module::Package::RDF"@en ; a dcs:Packaging ] ;
+		dcs:item   [ rdfs:label "use 5.010"@en ; a dcs:Update ] ;
+		dcs:item   [ rdfs:label "Don't add methods to UNIVERSAL unless explicitly requested."@en ]
+		] .

@@ -1,6 +1,8 @@
 use Test::More tests => 5;
 BEGIN { use_ok('RDF::Everywhere') };
 
+RDF::Everywhere->import('-universal');
+
 my $test = bless {}, QuuxFooBarBaz::Example::RE;
 
 ok($test->can('rdf_node'), "Objects can rdf_node.");

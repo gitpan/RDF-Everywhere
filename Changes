@@ -1,14 +1,22 @@
-############################################################################
-## Changes #################################################################
-############################################################################
-
 RDF-Everywhere
 ==============
 
 Created:      2010-11-22
-Home page:    <http://search.cpan.org/dist/RDF-Everywhere/>
+Home page:    <https://metacpan.org/release/RDF-Everywhere>
 Bug tracker:  <http://rt.cpan.org/Dist/Display.html?Queue=RDF-Everywhere>
 Maintainer:   Toby Inkster <mailto:tobyink@cpan.org>
 
-0.001 [2010-11-24]
+0.002  2011-11-06
+
+ - Don't add methods to UNIVERSAL unless explicitly requested.
+ - (Addition) RDF::Everywhere::install_node_converter
+ - (Addition) RDF::Everywhere::define_prefix
+ - (Update) use 5.010
+ - (Packaging) Module::Package::RDF
+ - (Addition) RDF::Everywhere::install_object_converter
+ - (Addition) RDF::Everywhere::define_term
+
+0.001  2010-11-24
+# Initial release
+
 

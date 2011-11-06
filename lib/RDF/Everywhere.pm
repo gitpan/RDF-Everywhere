@@ -1,33 +1,40 @@
 package RDF::Everywhere;
 
-use 5.008;
-use base qw'Exporter';
+use 5.010;
 use strict;
+use utf8;
 
-use Data::UUID;
-use RDF::Trine;
-use Scalar::Util qw[blessed reftype refaddr];
+use Data::UUID 0 qw();
+use Object::ID 0 qw(object_id);
+use RDF::Trine 0 qw();
+use Scalar::Util 0 qw(blessed reftype);
+use Moan qw(assert);
 
+our $AUTHORITY;
 our $context;
 our @EXPORT_OK;
 our %mappings;
 our @object_converters;
+our %PRAGMATA;
 our %terms;
-our @typed_literal_converters;
+our @node_converters;
 our $VERSION;
 
 BEGIN
 {
-	$VERSION = '0.001';
-	
+	$AUTHORITY = 'cpan:TOBYINK';
+	$VERSION   = '0.002';
+
 	@EXPORT_OK = qw(rdf_node to_rdf rdf_type);
 	
-	($context = Data::UUID->new->create_str) =~ s/\-//g;
-	
-	*UNIVERSAL::rdf_node  = \&rdf_node;
-	*UNIVERSAL::rdf_type  = \&rdf_type;
-	*UNIVERSAL::to_rdf    = \&to_rdf;
-	
+	%PRAGMATA = (
+		universal => sub {
+			*UNIVERSAL::rdf_node  = \&rdf_node;
+			*UNIVERSAL::rdf_type  = \&rdf_type;
+			*UNIVERSAL::to_rdf    = \&to_rdf;
+			},
+		);
+		
 	%mappings = (
 		owl	=> "http://www.w3.org/2002/07/owl#",
 		rdf	=> "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
@@ -142,21 +149,57 @@ BEGIN
 		blessed	=> "http://purl.org/NET/cpan-uri/class/",
 		);
 	
-	@typed_literal_converters = (
-		[ 'URI'        => \&convert_URI ],
-		[ 'DateTime'   => \&convert_DateTime ],
-		[ 'Set::Array' => \&convert_Set_Array ],
-		[ 'RDF::Trine::Node'   => \&convert_RDF_Trine_Node ],
+	@node_converters = (
+		[ 'URI'        => \&__convert_URI ],
+		[ 'DateTime'   => \&__convert_DateTime ],
+		[ 'Set::Array' => \&__convert_Set_Array ],
+		[ 'RDF::Trine::Node'   => \&__convert_RDF_Trine_Node ],
 		);
 	
 	@object_converters = (
-		[ 'Set::Array' => \&to_rdf_Set_Array ],
+		[ 'Set::Array' => \&__to_rdf_Set_Array ],
 		);
 	
 	%terms = (
 		label  => 'rdfs:label',
 		name   => 'foaf:name',
 		);
+}
+
+BEGIN { ($context = Data::UUID->new->create_str) =~ s/\-//g; }
+
+use Pragmatic qw();
+use base qw(Exporter);
+sub import { goto &Pragmatic::import; }
+
+sub define_mapping ($$)
+{
+	shift if $_[0] eq __PACKAGE__;
+	my ($pfx, $uri) = @_;
+	$mappings{$pfx} = $uri;
+}
+
+sub define_term ($$)
+{
+	shift if $_[0] eq __PACKAGE__;
+	my ($term, $uri) = @_;
+	$terms{$term} = $uri;
+}
+
+sub install_object_converter (&@)
+{
+	shift if $_[0] eq __PACKAGE__;
+	my ($callback, @class) = @_;
+	assert(ref $callback eq 'CODE', 'callback is not a coderef', ':callback');
+	push @object_converters, map { [$_ => $callback] } @class;
+}
+
+sub install_node_converter (&@)
+{
+	shift if $_[0] eq __PACKAGE__;
+	my ($callback, @class) = @_;
+	assert(ref $callback eq 'CODE', 'callback is not a coderef', ':callback');
+	push @node_converters, map { [$_ => $callback] } @class;
 }
 
 sub rdf_node (*;%)
@@ -172,7 +215,7 @@ sub rdf_node (*;%)
 	
 	if (blessed($self))
 	{
-		foreach my $cnv (@typed_literal_converters)
+		foreach my $cnv (@node_converters)
 		{
 			my ($type, $code) = @$cnv;
 			if ($self->isa($type))
@@ -192,7 +235,7 @@ sub rdf_node (*;%)
 	
 	if (ref($self))
 	{
-		return _blank(refaddr($self));
+		return _blank(object_id($self));
 	}
 	
 	return RDF::Trine::Node::Literal->new("$self");
@@ -312,31 +355,31 @@ sub _to_rdf
 	return $model;
 }
 
-sub convert_DateTime
+sub __convert_DateTime
 {
 	my ($self) = @_;
 	return RDF::Trine::Node::Literal->new("$self", undef, 'http://www.w3.org/2001/XMLSchema#dateTime');
 }
 
-sub convert_URI
+sub __convert_URI
 {
 	my ($self) = @_;
 	return RDF::Trine::Node::Resource->new("$self");
 }
 
-sub convert_Set_Array
+sub __convert_Set_Array
 {
 	my ($self) = @_;
 	return _resource('rdf:nil') unless $self->length;
 	return;
 }
 
-sub convert_RDF_Trine_Node
+sub __convert_RDF_Trine_Node
 {
 	return $_[0];
 }
 
-sub to_rdf_Set_Array
+sub __to_rdf_Set_Array
 {
 	my ($self, %options) = @_;
 	
@@ -357,7 +400,7 @@ sub to_rdf_Set_Array
 			
 			return _resource('rdf:nil') unless $i < $self->length;
 			
-			my $ident = _blank(refaddr($self), $i);
+			my $ident = _blank(object_id($self), $i);
 			$model->add_statement(
 				RDF::Trine::Statement->new($ident, _resource('rdf:first'), rdf_node($self->at($i)))
 				);
@@ -422,7 +465,7 @@ RDF::Everywhere - makes everything in your Perl code an RDF resource.
 
 =head1 SYNOPSIS
 
-  use RDF::Everywhere;
+  use RDF::Everywhere qw(-universal);
   
   # Methods are installed in UNIVERSAL, so can be called on any
   # blessed object.
@@ -454,24 +497,25 @@ The idea is that RDF's graph data model is not dissimilar to Perl's data
 model, so all Perl objects get a C<to_rdf> method which returns an RDF
 equivalent of the object's data.
 
-=head2 Universal Methods
+=head2 Exportable Functions
 
-The following methods are defined in the L<UNIVERSAL> namespace, which means
-they can be called on all blessed objects (like C<can> and C<isa>).
+No functions exported by default - request them explicitly...
+
+ use RDF::Everywhere qw[to_rdf];
 
 =over
 
-=item C<rdf_node>
+=item C<< rdf_node($object) >>
 
 Returns an L<RDF::Trine::Node> object identifying the object. This will usually
 be an L<RDF::Trine::Node::Blank> but occasionally a L<RDF::Trine::Node::Resource>
 or even a L<RDF::Trine::Node::Literal>.
 
-=item C<rdf_type>
+=item C<< rdf_type($object) >>
 
 Returns an L<RDF::Trine::Node::Resource> object identifying the type of object.
 
-=item C<< to_rdf(%options) >>
+=item C<< to_rdf($object, %options) >>
 
 Returns an L<RDF::Trine::Model> object containing data about the object. The
 three options worth bothering about are:
@@ -495,15 +539,56 @@ provide.
 
 =back
 
-=head2 Functions
+=head2 Universal Methods
 
-The methods are also available as functions. Just export them:
+You can make the functions available as UNIVERSAL methods:
 
-  use RDF::Everywhere qw[to_rdf];
+ use RDF::Everywhere qw[-universal];
 
-And use them by passing the thing you want to convert to RDF as the first
-parameter. This is useful in that it allows you to use RDF::Everywhere's
-functionality with non-blessed variables.
+=head2 Config Functions
+
+These are not exportable:
+
+=over
+
+=item C<< RDF::Everywhere::define_term $term => $uri >>
+
+Instructs RDF::Everywhere to expand:
+
+ $hash->{$term} = "value";
+
+to:
+
+ [] <$uri> "value" .
+
+=item C<< RDF::Everywhere::define_mapping $prefix => $uri >>
+
+Instructs RDF::Everywhere to expand:
+
+ $hash->{$prefix . "suffix"} = "value";
+
+to:
+
+ [] <${prefix}suffix> "value" .
+
+=item C<< RDF::Everywhere::install_object_converter { CODEBLOCK } $class1, $class2 ... >>
+
+Provide a callback to handle RDF conversion for particular classes.
+This is a coderef that takes an object and returns an RDF::Trine::Model
+describing it.
+
+The callback can return undef to indicate lack of success.
+
+=item C<< RDF::Everywhere::install_node_converter { CODEBLOCK } $class1, $class2 ... >>
+
+Provide a callback to handle RDF conversion for particular classes.
+This is a coderef that takes an object and returns an RDF::Trine::Node
+for it. This is mostly useful for things that can be converted to a
+single literal - e.g. a DateTime object into an xsd:dateTime.
+
+The callback can return undef to indicate lack of success.
+
+=back
 
 =head1 HOW IT WORKS
 
@@ -511,23 +596,15 @@ I<Advanced usage information.>
 
 =head2 How are Perl variables converted to RDF::Trine::Nodes?
 
-A module can of course override rdf_node via normal Perl inheritance, but the
-UNIVERSAL version works like this:
+Blessed objects can provide their own rdf_node method, which will be
+used if available.
 
-Firstly, B<< @RDF::Everywhere::typed_literal_converters >> is checked for
-a converter function that can handle it. This list takes the following
-format:
+Firstly, the list of node converters is checked for a converter function
+that can handle it. If an entry in the list applies to the variable being
+converted, it is use to perform the conversion.
 
-  (
-    [ 'Foo::Bar' => sub { my $obj = shift; ... ; return $node; } ],
-    [ 'Foo::Baz' => sub { my $obj = shift; ... ; return $node; } ],
-  );
-
-If an entry in the list applies to the variable being converted, it is
-use to perform the conversion.
-
-Typed literal converters are pre-defined for <DateTime>, <URI>,
-<Set::Array> and <RDF::Trine::Node>.
+Node converters are pre-defined for C<DateTime>, C<URI>, C<Set::Array> and
+C<RDF::Trine::Node>.
 
 Failing that, if the variable being converted is a hashref (including
 blessed hashrefs) with a key called C<< '@about' >> then that is used as
@@ -538,8 +615,8 @@ taken to be plain literals.
 
 =head2 How the RDF type of a Perl variable is decided?
 
-A module can of course override rdf_type via normal Perl inheritance, but the
-UNIVERSAL version works like this:
+Blessed objects can provide their own rdf_type method, which will be
+used if available.
 
 If the variable being converted is a hashref (including blessed hashrefs)
 with a key called C<< '@type' >> then that is used as a CURIE or URI to
@@ -553,20 +630,12 @@ Otherwise, it has no type.
 
 =head2 How is RDF data for a variable generated?
 
-A module can of course override to_rdf via normal Perl inheritance, but the
-UNIVERSAL version works like this:
+Blessed objects can provide their own to_rdf method, which will be
+used if available.
 
-Firstly, B<< @RDF::Everywhere::object_converters >> is checked for
-a converter function that can handle it. This list takes the following
-format:
-
-  (
-    [ 'Foo::Bar' => sub { my $obj = shift; ... ; return $model; } ],
-    [ 'Foo::Baz' => sub { my $obj = shift; ... ; return $model; } ],
-  );
-
-If an entry in the list applies to the variable being converted, it is
-use to perform the conversion, and the result is returned.
+Firstly, the list of object converters is checked for a converter function
+that can handle it. If an entry in the list applies to the variable being
+converted, it is use to perform the conversion, and the result is returned.
 
 A converter is pre-defined for <Set::Array> (treating it as an rdf:List).
 
@@ -580,20 +649,19 @@ as an rdf:List (use L<Set::Array> for rdf:Lists).
 
 =head2 How does CURIE mapping work?
 
-Tokens without a colon are looked up in B<< %RDF::Everywhere::terms >>.
+Tokens without a colon are looked up in the list of defined tokens.
 If not found, for predicates a default prefix
 'http://wiki.ontologi.es/perl-object#' is used; for non-predicates,
 a relative URI.
 
-Tokens with a colon are treated as a CURIE with mappings from
-B<< %RDF::Everywhere::mappings >>. If no mapping is found, it is
-assumed to be a URI.
+Tokens with a colon are treated as a CURIE according to the defined
+mappings, or a URI if no mapping is defined.
 
 =head1 SEE ALSO
 
 L<RDF::Trine>, L<UNIVERSAL>.
 
-L<http://perlrdf.org/>.
+L<http://www.perlrdf.org/>.
 
 =head1 BUGS
 
@@ -605,7 +673,7 @@ Toby Inkster E<lt>tobyink@cpan.orgE<gt>.
 
 =head1 COPYRIGHT
 
-Copyright 2010 Toby Inkster
+Copyright 2010-2011 Toby Inkster
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
